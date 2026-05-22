@@ -1,0 +1,159 @@
+void enviarWhatsApp(String message) {
+  String url = "https://api.callmebot.com/whatsapp.php?phone=" 
+               + phoneNumber 
+               + "&apikey=" + apiKey 
+               + "&text=" + urlEncode(message);
+
+  HTTPClient http;
+  http.begin(url);
+
+  int httpResponseCode = http.GET();
+
+  if (httpResponseCode == 200) {
+    Serial.println("✅ Mensagem enviada com sucesso!");
+  } else {
+    Serial.print("❌ Erro: HTTP ");
+    Serial.println(httpResponseCode);
+  }
+
+  http.end();
+}
+
+void enviarDados(float temperatura, float umidade) {
+  HTTPClient http;
+  http.begin(supabase_url);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("apikey", api_key);
+  http.addHeader("Authorization", String("Bearer ") + api_key);
+
+  StaticJsonDocument<256> doc;
+  doc["temperatura_c"]      = temperatura;
+  doc["umidade_pct"]        = umidade;
+  doc["luminosidade"]       = valorLdrAtual;
+  doc["presenca"]           = presencaDetectada;
+  doc["probabilidade_vida"] = probabilidadeVida;
+
+  String jsonBody;
+  serializeJson(doc, jsonBody);
+
+  int httpCode = http.POST(jsonBody);
+
+  if (httpCode == 201) {
+    Serial.println("Dados enviados com sucesso!");
+  } else {
+    Serial.printf("Erro %d: %s\n", httpCode, http.getString().c_str());
+  }
+
+  http.end();
+}
+
+void botao(){
+  static bool estadoBotao = true;
+  static bool estadoBotaoAnterior = true;
+  const unsigned long debounce = 20;
+  static unsigned long tempoDebounce = 0;
+  if(millis() - tempoDebounce >= debounce){
+    tempoDebounce = millis();
+    estadoBotao = digitalRead(BOTAO);
+    if(estadoBotao == LOW && estadoBotaoAnterior == HIGH){
+      estadoSistema = !estadoSistema;
+    }
+    estadoBotaoAnterior = estadoBotao;
+  }
+}
+
+void monitorSerial(){
+  const unsigned long intervaloSerial = 1000;
+  static unsigned long tempoSerial = 0;
+
+  if(millis() - tempoSerial >= intervaloSerial){
+    tempoSerial = millis();
+    Serial.println(estadoSistema ? "Ativado" : "Desativado");
+    Serial.println("");
+     if (probabilidadeVida > 75) {
+      Serial.println("ALERTA! Alta probabilidade de vida detectada!");
+      Serial.println("");
+      }
+    if(valorX < 1000){
+      myServo.write(45);
+      Serial.println("Esquerda");
+      Serial.println("");
+    }
+    else if(valorX > 2500){
+      myServo.write(135);
+      Serial.println("Direita");
+      Serial.println("");
+    }
+    else if(valorY < 1500){
+      myServo.write(0);
+      Serial.println("Cima");
+      Serial.println("");
+    }
+    else if(valorY > 2500){
+      myServo.write(180);
+      Serial.println("Baixo");
+      Serial.println("");
+    }
+    else{
+      myServo.write(90);
+    }
+    Serial.print("Probabilidade de vida: ");
+    Serial.print(probabilidadeVida);
+    Serial.println("%");
+    Serial.println(valorLdrAtual);
+  }
+}
+
+void calibrarLdr(bool &ldrCalibrado){
+  static bool calibrado = false;
+  static bool mensagemLdr = true;
+  if(!ldrCalibrado){
+    calibrado = false;
+    if(mensagemLdr){
+      Serial.print("CalibrandoLDR");
+      mensagemLdr = false;
+    }
+
+    long soma = 0;
+    for(int i = 0; i < 100; i++){
+      soma += analogRead(LDR);
+    }
+    mediaLdr = soma/100;
+    ldrCalibrado = true;
+  }
+  else if(!calibrado){
+    Serial.println("LDR Calibrado");
+    calibrado = true;
+    mensagemLdr = true;
+  }
+}
+void calcularProbabilidadeVida(float temperatura, float umidade) {
+  int probabilidade = 0;
+
+  if (temperatura >= 15.0 && temperatura <= 30.0)
+    probabilidade += 25;
+
+  if (umidade >= 40.0 && umidade <= 70.0)
+    probabilidade += 25;
+
+  if (valorLdrAtual > 2000)
+    probabilidade += 20;
+
+  if (presencaDetectada)
+    probabilidade += 30;
+
+  probabilidadeVida = probabilidade;
+}
+
+void alertaVida() {
+  static bool alertaEnviado = false;
+
+  if (probabilidadeVida > 75) {
+    if (!alertaEnviado) {
+      enviarWhatsApp("Alerta! Alta probabilidade de vida detectada no planeta.");
+      alertaEnviado = true;
+    }
+  } else {
+    alertaEnviado = false;
+  }
+}
