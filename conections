@@ -1,0 +1,39 @@
+void conectarWiFi(bool WiFiConectado){
+  const unsigned long intervaloTimeout = 20000;
+  static unsigned long tempoTimeout = 0;
+  const unsigned long intervaloPontos = 100;
+  static unsigned long tempoPontos = 0;
+
+  static bool estadoConexao = false;
+  static bool estadoMensagem = false;
+  static bool tentandoConectar = false;
+  if(!WiFiConectado){
+    estadoConexao = false;
+    if(tentandoConectar && millis() - tempoTimeout >= intervaloTimeout){
+      Serial.println("Tentando novamente");
+      WiFi.disconnect();
+      estadoMensagem = false;
+      tentandoConectar = false;
+    }
+    if(!estadoMensagem){
+      Serial.print("Conectando");
+      estadoMensagem = true;
+    }
+    if(!tentandoConectar){
+      WiFi.begin(ssid, password);
+      tentandoConectar = true;
+      tempoTimeout = millis();
+    }
+    if(millis() - tempoPontos >= intervaloPontos){
+      tempoPontos = millis();
+      Serial.print(".");
+    }
+  }
+  else if(!estadoConexao){
+    Serial.println("\nWiFi conectado");
+    Serial.println(WiFi.localIP());
+    estadoMensagem = false;
+    tentandoConectar = false;
+    estadoConexao = true;
+  }
+}
