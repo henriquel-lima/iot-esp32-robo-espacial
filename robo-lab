@@ -1,0 +1,91 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <UrlEncode.h>
+#include <DHTesp.h>
+#include <ESP32Servo.h>
+#include "secrets.h"
+
+#define VRx 36
+#define VRy 39
+#define SERVO_PIN 19
+#define DHT_PIN 23
+#define BOTAO 25
+#define LED_VERMELHO 26
+#define LED_VERDE 27
+#define LDR 34
+#define PIR 13
+
+Servo myServo;
+
+bool estadoSistema = true;
+int probabilidadeVida = 0;
+
+uint16_t mediaLdr;
+bool ldrCalibrado = false;
+uint16_t valorLdrAtual;
+uint16_t valorX;
+uint16_t valorY;
+
+bool presencaDetectada = false;
+
+DHTesp dht;
+
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
+
+const char* supabase_url = "SUPABASE_URL";
+const char* api_key = "API_KEY";
+
+String phoneNumber = PHONE_NUMBER;
+String apiKey = API_KEY;
+
+const unsigned long intervaloSupaBase = 10000;
+unsigned long tempoSupaBase = 0;
+
+void conectarWiFi(bool WiFiConectado);
+
+void setup() {
+  Serial.begin(115200);
+
+  dht.setup(DHT_PIN, DHTesp::DHT22);
+  myServo.attach(SERVO_PIN);
+
+  pinMode(BOTAO, INPUT_PULLUP);
+  pinMode(LED_VERMELHO, OUTPUT);
+  pinMode(LED_VERDE, OUTPUT);
+  pinMode(LDR, INPUT);
+  pinMode(PIR, INPUT);
+}
+
+void loop() {
+  bool WiFiConectado = WiFi.status() == WL_CONNECTED;
+  conectarWiFi(WiFiConectado);
+
+  valorX = analogRead(VRx);
+  valorY = analogRead(VRy);
+  TempAndHumidity data = dht.getTempAndHumidity();
+  valorLdrAtual = analogRead(LDR);
+  presencaDetectada = digitalRead(PIR);
+  calcularProbabilidadeVida(data.temperature, data.humidity);
+
+  botao();
+  if(estadoSistema && probabilidadeVida < 75){
+    digitalWrite(LED_VERDE, HIGH);
+    digitalWrite(LED_VERMELHO, LOW);
+  }
+  else{
+    digitalWrite(LED_VERDE, LOW);
+    digitalWrite(LED_VERMELHO, HIGH);
+  }
+
+  if(WiFiConectado){
+    alertaVida();
+    if(millis() - tempoSupaBase >= intervaloSupaBase){
+      tempoSupaBase = millis();
+      enviarDados(data.temperature, data.humidity);
+    }
+  }
+
+  monitorSerial();
+}
