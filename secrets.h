@@ -1,0 +1,9 @@
+#ifndef SECRETS_H
+#define SECRETS_H
+
+#define WIFI_SSID "NOME_DA_REDE"
+#define WIFI_PASSWORD "SENHA_DA_REDE"
+#define PHONE_NUMBER "NUMERO_DE_CELULAR"
+#define API_KEY "CHAVE_API_CALLMEBOT"
+
+#endif
