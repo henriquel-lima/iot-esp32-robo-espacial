@@ -1,121 +1,192 @@
-https://wokwi.com/projects/463933348212379649
+# Robô Detector de Vida
 
-Controle de Sistema com ESP32, Joystick e WhatsApp
-Objetivo da etapa
+Robô baseado em **ESP32** que monitora o ambiente com múltiplos sensores, calcula uma **probabilidade de vida** e envia alertas via **WhatsApp** e salva os dados no **Supabase**.
 
-Este projeto tem como objetivo desenvolver um sistema utilizando o ESP32 para:
+---
 
-Ler os movimentos de um joystick analógico;
-Controlar o estado do sistema através de um botão;
-Indicar o funcionamento utilizando LEDs;
-Enviar notificações via WhatsApp usando a API do CallMeBot
-;
-Simular o circuito na plataforma Wokwi
-.
+## Sumário
 
-O sistema permanece ativo enquanto o botão não for pressionado. Quando desligado, uma mensagem é enviada automaticamente para o WhatsApp configurado.
+- [Como o código funciona](#como-o-código-funciona)
+- [Como montar o robô](#como-montar-o-robô)
+- [Como consultar os dados salvos](#como-consultar-os-dados-salvos)
+- [Configuração inicial](#configuração-inicial)
 
-Componentes do circuito
+---
 
-Os componentes utilizados no projeto são:
+## Como o código funciona
 
-1x ESP32
-1x Joystick analógico
-1x Push Button
-1x LED verde
-1x LED vermelho
-2x Resistores para os LEDs (220Ω recomendados)
-Jumpers para conexão
-Rede Wi-Fi para comunicação HTTP
-Funcionamento do sistema
-Sistema ligado
+O projeto é dividido em três arquivos principais:
 
-Quando o sistema está ativo:
+### `main.ino` — Núcleo do sistema
 
-LED verde permanece aceso;
-LED vermelho permanece apagado;
-O joystick é monitorado continuamente;
-Os comandos são exibidos no monitor serial:
-ESQUERDA
-DIREITA
-FRENTE
-TRÁS
-Sistema desligado
+Contém o `setup()` e o `loop()` principais. A cada ciclo do loop, o ESP32:
 
-Quando o botão é pressionado:
+1. **Verifica a conexão Wi-Fi** e tenta reconectar se necessário.
+2. **Lê todos os sensores**: joystick (X e Y), temperatura/umidade (DHT22), luminosidade (LDR) e presença (PIR).
+3. **Calcula a probabilidade de vida** com base nas leituras.
+4. **Controla os LEDs**:
+   - LED verde aceso: sistema ativo e probabilidade de vida abaixo de 75%.
+   - LED vermelho aceso: probabilidade de vida alta ( 75%) ou sistema desativado.
+5. **Envia dados ao Supabase** a cada 10 segundos (se conectado ao Wi-Fi).
+6. **Dispara alerta no WhatsApp** se a probabilidade de vida ultrapassar 75%.
 
-O estado do sistema é alternado;
-LED verde apaga;
-LED vermelho acende;
-Uma mensagem é enviada via WhatsApp:
-Comando: Desligar
-Como rodar no Wokwi
-1. Acesse o Wokwi
+### `functions.ino` — Funções auxiliares
 
-Abra a plataforma:
+| Função | O que faz |
+|---|---|
+| `calcularProbabilidadeVida()` | Soma pontos com base nos sensores e gera um percentual de 0 a 100% |
+| `alertaVida()` | Envia mensagem de WhatsApp uma única vez quando probabilidade > 75% |
+| `enviarDados()` | Faz POST no Supabase com temperatura, umidade, luminosidade, presença e probabilidade |
+| `enviarWhatsApp()` | Envia mensagem via API do CallMeBot |
+| `botao()` | Liga/desliga o sistema com debounce de 20 ms |
+| `monitorSerial()` | Exibe dados no Serial Monitor e move o servo conforme o joystick |
+| `calibrarLdr()` | Tira 100 amostras do LDR para calcular a média de calibração |
 
-Wokwi Simulator
+### Lógica de probabilidade de vida
 
-2. Crie um novo projeto ESP32
-Clique em "New Project"
-Escolha ESP32
-3. Monte o circuito
+A pontuação é calculada somando blocos de pontos:
 
-Adicione os seguintes componentes:
+| Condição | Pontos |
+|---|---|
+| Temperatura entre 15C e 30C | +25 |
+| Umidade entre 40% e 70% | +25 |
+| Luminosidade (LDR) > 2000 | +20 |
+| Presença detectada pelo PIR | +30 |
+| **Total máximo** | **100%** |
 
+### `conections.ino` — Gerenciamento de Wi-Fi
+
+Gerencia a conexão Wi-Fi de forma não-bloqueante com timeout de **20 segundos**. Se não conseguir conectar, desconecta e tenta novamente automaticamente.
+
+---
+
+## Como montar o robô
+
+### Lista de componentes
+
+| Componente | Quantidade |
+|---|---|
+| ESP32 (DevKit ou similar) | 1 |
+| Sensor DHT22 (temperatura e umidade) | 1 |
+| Sensor PIR (presença/movimento) | 1 |
+| LDR (resistor dependente de luz) | 1 |
+| Servo motor | 1 |
+| Joystick analógico (módulo KY-023) | 1 |
+| LED vermelho | 1 |
+| LED verde | 1 |
+| Resistores 220 (para os LEDs) | 2 |
+| Resistor 10k (pull-down para o LDR) | 1 |
+| Botão (push button) | 1 |
+| Protoboard e jumpers |  |
+
+### Pinagem
+
+| Componente | Pino no ESP32 |
+|---|---|
+| Joystick VRx | GPIO 36 |
+| Joystick VRy | GPIO 39 |
+| Servo motor | GPIO 19 |
+| DHT22 | GPIO 23 |
+| Botão | GPIO 25 |
+| LED Vermelho | GPIO 26 |
+| LED Verde | GPIO 27 |
+| LDR | GPIO 34 |
+| Sensor PIR | GPIO 13 |
+
+### Diagrama de conexões
+
+```
 ESP32
-Joystick
-Push Button
-2 LEDs
+ GPIO 36  VRx do Joystick
+ GPIO 39  VRy do Joystick
+ GPIO 19  Sinal do Servo Motor
+ GPIO 23  Data do DHT22
+ GPIO 25  Botão (outra perna no GND)
+ GPIO 26  Resistor 220  LED Vermelho  GND
+ GPIO 27  Resistor 220  LED Verde  GND
+ GPIO 34  LDR em divisor de tensão (com resistor 10k para GND)
+ GPIO 13  Sinal do Sensor PIR
+```
 
-Realize as conexões conforme os pinos definidos no código:
+> **Atenção:** O botão deve ser conectado entre o **GPIO 25** e o **GND**. O código já usa `INPUT_PULLUP` internamente.
 
-Componente	GPIO ESP32
-Botão	GPIO 4
-LED Verde	GPIO 9*
-LED Vermelho	GPIO 10*
-VRx do Joystick	GPIO 39
-VRy do Joystick	GPIO 40
+---
 
-*Recomenda-se alterar GPIO 9 e 10 para GPIOs seguros no ESP32 real, como GPIO 2 e 5.
+## Como consultar os dados salvos
 
-4. Cole o código
+Os dados são enviados ao **Supabase** a cada 10 segundos. Para consultá-los:
 
-Copie o código .ino para o editor do Wokwi.
+### 1. Pelo painel do Supabase
 
-5. Configure o Wi-Fi
+1. Acesse [supabase.com](https://supabase.com) e faça login.
+2. Abra o seu projeto.
+3. No menu lateral, clique em **Table Editor**.
+4. Selecione a tabela onde os dados estão sendo inseridos.
+5. Os registros aparecem em ordem de inserção, com os campos:
 
-O Wokwi utiliza automaticamente:
+| Campo | Descrição |
+|---|---|
+| `temperatura_c` | Temperatura em graus Celsius |
+| `umidade_pct` | Umidade relativa em % |
+| `luminosidade` | Valor analógico do LDR (04095) |
+| `presenca` | `true` se movimento foi detectado, `false` caso contrário |
+| `probabilidade_vida` | Percentual calculado (0100%) |
 
-const char* ssid = "Wokwi-GUEST";
-const char* password = "";
+### 2. Pelo SQL Editor do Supabase
 
-Não é necessário alterar.
+Ainda no painel, clique em **SQL Editor** e execute:
 
-6. Configure o CallMeBot
+```sql
+SELECT * FROM nome_da_tabela ORDER BY created_at DESC LIMIT 50;
+```
 
-Para receber mensagens no WhatsApp:
+Substitua `nome_da_tabela` pelo nome real da sua tabela.
 
-Acesse:
+### 3. Via API REST
 
-CallMeBot API Setup
+Você pode consultar os dados de qualquer aplicação com uma requisição HTTP:
 
-Autorize o número desejado;
-Copie sua API Key;
-Substitua no código:
-String phoneNumber = "SEU_NUMERO";
-String apiKey = "SUA_APIKEY";
+```bash
+curl "https://SEU_PROJETO.supabase.co/rest/v1/nome_da_tabela?order=created_at.desc&limit=10" \
+  -H "apikey: SUA_API_KEY" \
+  -H "Authorization: Bearer SUA_API_KEY"
+```
 
-7. Execute a simulação
-Clique em Start Simulation;
-Abra o Serial Monitor;
-Movimente o joystick para visualizar os comandos;
-Pressione o botão para desligar o sistema e enviar a mensagem no WhatsApp.
+---
 
-Tecnologias utilizadas
-Linguagem C++
-ESP32
-Wi-Fi
-HTTPClient
-API CallMeBot
-Simulação Wokwi
+## Configuração inicial
+
+Antes de carregar o código no ESP32, edite o arquivo `secrets.h`:
+
+```cpp
+#define WIFI_SSID     "nome_da_sua_rede"
+#define WIFI_PASSWORD "senha_da_sua_rede"
+#define PHONE_NUMBER  "+5511999999999"   // Com código do país
+#define API_KEY       "sua_chave_callmebot"
+```
+
+E no arquivo `main.ino`, preencha as credenciais do Supabase:
+
+```cpp
+const char* supabase_url = "https://SEU_PROJETO.supabase.co/rest/v1/nome_da_tabela";
+const char* api_key      = "SUA_API_KEY_DO_SUPABASE";
+```
+
+### Obter a chave do CallMeBot
+
+1. Adicione o número **+34 644 61 25 65** nos seus contatos do WhatsApp.
+2. Envie a mensagem: `I allow callmebot to send me messages`
+3. Você receberá sua `API_KEY` em alguns instantes.
+
+---
+
+## Bibliotecas necessárias
+
+Instale pelo **Gerenciador de Bibliotecas** da Arduino IDE:
+
+- `DHTesp`
+- `ESP32Servo`
+- `ArduinoJson`
+- `UrlEncode`
+- `WiFi` *(já inclusa no pacote ESP32)*
+- `HTTPClient` *(já inclusa no pacote ESP32)*
