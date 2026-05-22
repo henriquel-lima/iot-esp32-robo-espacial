@@ -1,0 +1,10 @@
+CREATE TABLE public.leituras (
+  id bigint NOT NULL DEFAULT nextval('leituras_id_seq'::regclass),
+  criado_em timestamp with time zone DEFAULT now(),
+  temperatura_c double precision CHECK (temperatura_c >= '-40'::integer::double precision AND temperatura_c <= 80::double precision),
+  umidade_pct double precision CHECK (umidade_pct >= 0::double precision AND umidade_pct <= 100::double precision),
+  luminosidade integer,
+  presenca boolean,
+  probabilidade_vida integer CHECK (probabilidade_vida >= 0 AND probabilidade_vida <= 100),
+  CONSTRAINT leituras_pkey PRIMARY KEY (id)
+);
